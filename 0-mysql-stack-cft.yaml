@@ -162,9 +162,9 @@ Mappings:
     development: 
       instanceClass: db.t2.micro
     test:
-      instanceClass: db.t2.micro
-    production:
       instanceClass: db.t2.small
+    production:
+      instanceClass: db.t2.large
 Resources:
   MyDB:
     Type: 'AWS::RDS::DBInstance'
