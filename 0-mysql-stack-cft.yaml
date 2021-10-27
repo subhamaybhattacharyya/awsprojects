@@ -207,11 +207,11 @@ Resources:
 Outputs:
   StackRDSEndpoint:
     Description: The endpoint of the RDS database.
-    Value: Fn::GetAtt MyRDS.Endpoint.Address
+    Value: !GetAtt MyDB.Endpoint.Address
     Export:
       Name: RDSEndpoint
   StackRDSPort:
     Description: The port of the RDS database.
-    Value: Fn::GetAtt MyRDS.Endpoint.port
+    Value: !GetAtt MyDB.Endpoint.Port
     Export:
       Name: RDSPort
