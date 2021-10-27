@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: AWS CloudFormation Template MySQL Database
+
+Metadata:
+  TemplateName: my-sql-cft.yaml
+  TemplateType: MySQL RDS Database
+  Version: 1.0.0
+  Owner: Subhamay Bhattacharyya
+  ProjectName: RDS-Lambda-RestAPI
+  Last Modified: Oct 22 2021
+  StepsToTest: |
+    Manualy verify the RDS Database .
+  StepsToCleanup: |
+    Stack delete command
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: "Select the Environment to deploy the stack"
+      Parameters: 
+      - EnvironmentName
+    - Label:
+        default: "Select MySQL Database Engine parameters"
+      Parameters:
+      - DBAWSRegion
+      - DBAvailabilityZone
+      - DBEngineVersion
+      - DBInstanceID
+      - DBName
+      - DBStorageType
+      - DBAllocatedStorage
+    - Label:
+        default: "Credentials to be stored in AWS Systems Mansger Parameter Store"
+      Parameters:
+      - DBMasterUsername
+      - DBMasterUserPassword
+    ParameterLabels:
+      DBAWSRegion:
+        default: "Which region you want to deploy the stack ?"
+      DBAvailabilityZone:
+        default: "Which availability zone you want to deploy the stack ?"
+      DBEngineVersion:
+        default: "The MySQL database engine version ?"
+      DBInstanceID:
+        default: "Your MySQL database instance name:"
+      DBMasterUsername:
+        default: "Your database master username:"
+      DBMasterUserPassword:
+        default: "Your database password:"
+      DBName:
+        default: "Your database name ?"
+      DBStorageType:
+        default: "Your databse storage type ?"
+      DBAllocatedStorage:
+        default: "Your database allocated storage ?"
+
+### Create the SSM Parameter Store for test and production environment
+Conditions:
+  CreateTestProdResources: !Or [!Equals [ !Ref EnvironmentName, production ], !Equals [ !Ref EnvironmentName, test ]]
+
+Parameters:
+  EnvironmentName:
+    Default: development
+    Description: Environment (development / test / production)
+    Type: String
+    AllowedValues: [development ,test, production]
+    ConstraintDescription: the environment should be either development, test or production
+  DBAWSRegion:
+    Default: us-east-1
+    Description: AWS Region where the stack will be created
+    Type: String
+    AllowedValues: [us-east-1, us-east-2, us-west-1, us-west-2]
+    ConstraintDescription: Select a region within USA.
+  DBInstanceID:
+    Default: simple-mysql-instance
+    Description: MySQL Database Istance
+    Type: String
+    MinLength: '1'
+    MaxLength: '63'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: >-
+      Must begin with a letter and must not end with a hyphen or contain two
+      consecutive hyphens.
+  DBEngineVersion:
+    Default: '8.0.23'
+    Description: MySQL DB Version
+    Type: String
+    AllowedValues: ['8.0.11', '8.0.13', '8.0.15', '8.0.16', '8.0.17', '8.0.19', '8.0.20', '8.0.21', '8.0.23','8.0.25', '8.0.26']
+  DBName:
+    Default: test_database
+    Description: My database
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_]*'
+    ConstraintDescription: Must begin with a letter and contain only alphanumeric characters.
+  DBAllocatedStorage:
+    Default: '20'
+    Description: The size of the database (GiB)
+    Type: Number
+    MinValue: '20'
+    MaxValue: '65536'
+    ConstraintDescription: must be between 20 and 65536 GiB.
+  DBMasterUsername:
+    NoEcho: false
+    Default: admin
+    Description: Username for MySQL database
+    Type: String
+    MinLength: '1'
+    MaxLength: '16'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+  DBMasterUserPassword:
+    NoEcho: true
+    Description: Password for MySQL database
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '[a-zA-Z0-9]*'
+    ConstraintDescription: must contain only alphanumeric characters.
+  DBAvailabilityZone:
+    Default: us-east-1a
+    Description: DB Availability Zone
+    Type: String
+    AllowedValues: ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d', 'us-east-1e', 'us-east-1f', 'us-east-2a', 'us-east-2b',
+                    'us-east-2c', 'us-west-1a', 'us-west-1c', 'us-west-2a', 'us-west-2b','us-west-2c', 'us-west-2d']
+  DBStorageType:
+    Default: gp2
+    Description: Storage Type
+    Type: String
+    AllowedValues: ['standard','gp2','io1']
+
+Rules:
+  InstanceRegionUSEast1:
+    RuleCondition: !Equals [!Ref DBAWSRegion, us-east-1]
+    Assertions:
+      - Assert: !Or [!Equals [!Ref DBAvailabilityZone, us-east-1a], !Equals [ !Ref DBAvailabilityZone, us-east-1b],
+                     !Equals [!Ref DBAvailabilityZone, us-east-1c], !Equals [ !Ref DBAvailabilityZone, us-east-1d],
+                     !Equals [!Ref DBAvailabilityZone, us-east-1e], !Equals [ !Ref DBAvailabilityZone, us-east-1f]]
+        AssertDescription: 'The availability zone should be selected within your selected region (us-east-1)'
+  InstanceRegionUSEast2:
+    RuleCondition: !Equals [!Ref DBAWSRegion, us-east-2]
+    Assertions:
+      - Assert: !Or [!Equals [!Ref DBAvailabilityZone, us-east-2a], !Equals [ !Ref DBAvailabilityZone, us-east-2b],
+                     !Equals [!Ref DBAvailabilityZone, us-east-2c]]
+        AssertDescription: 'The availability zone should be selected within your selected region (us-east-2)'
+  InstanceRegionUSWest1:
+    RuleCondition: !Equals [!Ref DBAWSRegion, us-west-1]
+    Assertions:
+      - Assert: !Or [!Equals [!Ref DBAvailabilityZone, us-west-1a], !Equals [ !Ref DBAvailabilityZone, us-west-1c]]
+        AssertDescription: 'The availability zone should be selected within your selected region (us-west-1)'
+  InstanceRegionUSWest2:
+    RuleCondition: !Equals [!Ref DBAWSRegion, us-west-2]
+    Assertions:
+      - Assert: !Or [!Equals [!Ref DBAvailabilityZone, us-west-2a], !Equals [ !Ref DBAvailabilityZone, us-west-2b],
+                     !Equals [!Ref DBAvailabilityZone, us-west-2c], !Equals [ !Ref DBAvailabilityZone, us-west-2d]]
+        AssertDescription: 'The availability zone should be selected within your selected region (us-west-2)'
+
+Mappings:
+  EnvironmentToInstanceClass:
+    development: 
+      instanceClass: db.t2.micro
+    test:
+      instanceClass: db.t2.micro
+    production:
+      instanceClass: db.t2.small
+Resources:
+  MyDB:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      DBInstanceIdentifier: !Ref DBInstanceID
+      DBName: !Ref DBName
+      DBInstanceClass: !FindInMap [EnvironmentToInstanceClass, !Ref EnvironmentName, instanceClass]
+      AllocatedStorage: !Ref DBAllocatedStorage
+      Engine: MySQL
+      EngineVersion: !Ref DBEngineVersion
+      StorageType: !Ref DBStorageType
+      MasterUsername: !Ref DBMasterUsername
+      MasterUserPassword: !Ref DBMasterUserPassword
+      AvailabilityZone: !Ref DBAvailabilityZone
+      AutoMinorVersionUpgrade: false
+  ParamStoreRDSUsername:
+    Type: AWS::SSM::Parameter
+    Condition: CreateTestProdResources
+    Properties:
+      Name: !Join ['/', ['/subhamay-aws',!Ref EnvironmentName, rds, mysql, user-id]]
+      Type: String
+      Value: !Ref DBMasterUsername
+      Description: SSM Parameter for storing RDS (MySQL) master username.
+      AllowedPattern: "^[a-zA-Z]{1,5}$"
+      Tags:
+        Environment: !Ref EnvironmentName
+    DependsOn: MyDB
+  ParamStoreRDSPassword:
+    Type: AWS::SSM::Parameter
+    Condition: CreateTestProdResources
+    Properties:
+      Name: !Join ['/', ['/subhamay-aws',!Ref EnvironmentName, rds, mysql, password]]
+      Type: String
+      Value: !Ref DBMasterUserPassword
+      Description: SSM Parameter for storing RDS (MySQL) master password.
+      Tags:
+        Environment: !Ref EnvironmentName
+    DependsOn: MyDB
+
+Outputs:
+  StackRDSEndpoint:
+    Description: The endpoint of the RDS database.
+    Value: Fn::GetAtt MyRDS.Endpoint.Address
+    Export:
+      Name: RDSEndpoint
+  StackRDSPort:
+    Description: The port of the RDS database.
+    Value: Fn::GetAtt MyRDS.Endpoint.port
+    Export:
+      Name: RDSPort
