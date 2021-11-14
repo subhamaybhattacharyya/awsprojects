@@ -1,0 +1,267 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: AWS CloudFormation Template for creating a SQS with DLQ and lambda to process the messages sent to the queue
+
+Metadata:
+  Template Name: lambda-with-dlq.yaml
+  Template Type: CloudFormation YAML template 
+  Owner: Subhamay Bhattacharyya
+  Project Name: My CloudFormation Practice
+  Last Modified: 13-Nov-2021
+  Version: 1.0.0
+  Changes:
+    Description: Intial version
+  LaunchedResources: 
+    Description: SQS
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: "Demo SQS Parameters"
+      Parameters: 
+      - DemoQueueName
+      - VisibilityTimeout
+    - Label:  
+        default: "Dead Letter Queue Parameters"
+      Parameters: 
+      - DemoDeadLetterQueueName
+      - DLQVisibilityTimeout
+      - DLQMessageRetentionPeriod
+    - Label: 
+        default: "Lambda function name"
+      Parameters: 
+      - DemoLambdaFunctionName
+      - NameOfExecutionRoleForLambda
+      - NameOfBasicExecutionPolicyForLambda
+      - NameOfSQSPolicyForLambda
+      - DemoLambdaMemory
+      - DemoLambdaTimeout
+    
+    ParameterLabels:
+      DemoQueueName:
+        default: "Name of the demo queue."
+      VisibilityTimeout:
+        default: "Visibility timeout of the demo queue."
+      DemoDeadLetterQueueName:
+        default: "Dead letter queue name."
+      DLQVisibilityTimeout:
+        default: "Dead letter queue visibility timeout period in seconds."
+      DLQMessageRetentionPeriod:
+        default: "Dead letter queue retension period in seconds."
+      DemoLambdaFunctionName: 
+        default: "Name of the demo lambda function."
+      NameOfExecutionRoleForLambda: 
+        default: "Name of basic execution role for the lambda function."
+      NameOfSQSPolicyForLambda:
+        default: "Name of the SQS policy for the lambda"
+      NameOfBasicExecutionPolicyForLambda: 
+        default: "Name of basic execution policy for the lambda function."
+      DemoLambdaMemory: 
+        default: "Memory to be used by the Lambda function."
+      DemoLambdaTimeout:
+        default: "Timeout period in secounds for the demo lambda function."
+      
+
+Parameters:
+  DemoDeadLetterQueueName:
+    Type: String
+    MinLength: 3
+    MaxLength: 80
+    AllowedPattern : "[a-zA-Z][a-zA-Z0-9-]*"
+    Default: my-demo-dead-letter-queue
+    ConstraintDescription: Malformed input-Parameter DemoDeadLetterQueueName must match pattern [a-zA-Z][a-zA-Z0-9-]*
+  DemoQueueName:
+    Type: String
+    MinLength: 3
+    MaxLength: 80
+    AllowedPattern : "[a-zA-Z][a-zA-Z0-9-]*"
+    Default: my-demo-queue
+    ConstraintDescription: Malformed input-Parameter DemoQueueName must match pattern [a-zA-Z][a-zA-Z0-9-]*
+  VisibilityTimeout:
+    Type: Number
+    Default: 5
+    MinValue: 1
+    MaxValue: 43200
+  DLQVisibilityTimeout:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 43200
+  DLQMessageRetentionPeriod:
+    Type: Number
+    Default: 1209600
+    MinValue: 1
+    MaxValue: 1209600
+  DemoLambdaFunctionName: 
+    Type: String
+    MinLength: 10
+    MaxLength: 30
+    AllowedPattern : "[a-zA-Z][a-zA-Z0-9-]*"
+    Default: my-lambda-with-dlq
+    ConstraintDescription: Malformed input-Parameter DemoLambdaFunctionName must match pattern [a-zA-Z][a-zA-Z0-9-]* 
+  NameOfBasicExecutionPolicyForLambda: 
+    Type: String
+    MinLength: 10
+    MaxLength: 50
+    Default: MyBasicLambdaExecutionPolicy
+    AllowedPattern : "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: Malformed input-Parameter NameOfBasicExecutionPolicyForLambda must match pattern [a-zA-Z][a-zA-Z0-9-]* 
+  NameOfSQSPolicyForLambda: 
+    Type: String
+    MinLength: 10
+    MaxLength: 50
+    Default: ReceiveDeleteMessageOnSQSPolicy
+    AllowedPattern : "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: Malformed input-Parameter NameOfSQSPolicyForLambda must match pattern [a-zA-Z][a-zA-Z0-9-]* 
+  NameOfExecutionRoleForLambda: 
+    Type: String
+    MinLength: 10
+    MaxLength: 50
+    Default: MyLambdaExecutionRole
+    AllowedPattern : "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: Malformed input-Parameter NameOfBasicExecutionRoleForLambda must match pattern [a-zA-Z][a-zA-Z0-9-]* 
+  DemoLambdaMemory:
+    Type: Number
+    Default: 128
+    MinValue: 128
+    MaxValue: 10240
+  DemoLambdaTimeout:
+    Type: Number
+    Default: 5
+    MinValue: 5
+    MaxValue: 60
+Resources:
+  DemoDeadLetterQueue: 
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Ref DemoDeadLetterQueueName
+      VisibilityTimeout: !Ref DLQVisibilityTimeout
+      MessageRetentionPeriod: !Ref DLQMessageRetentionPeriod
+  DemoQueue: 
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: !Ref DemoQueueName
+      RedrivePolicy: 
+        deadLetterTargetArn: !GetAtt DemoDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      VisibilityTimeout: !Ref VisibilityTimeout
+  DemoQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: __default_policy_ID
+        Version: '2012-10-17'
+        Statement:
+          - Sid: __owner_statement
+            Effect: Allow
+            Principal:
+              AWS: !Join [':',['arn:aws:iam:',!Ref 'AWS::AccountId','root']]
+            Action:
+              - SQS:*
+            Resource: !GetAtt DemoQueue.Arn
+      Queues:
+        - !Ref DemoQueue
+  DemoDLQQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Id: __default_policy_ID
+        Version: '2012-10-17'
+        Statement:
+          - Sid: __owner_statement
+            Effect: Allow
+            Principal:
+              AWS: !Join [':',['arn:aws:iam:',!Ref 'AWS::AccountId','root']]
+            Action:
+              - SQS:*
+            Resource: !GetAtt DemoDeadLetterQueue.Arn
+      Queues:
+        - !Ref DemoDeadLetterQueue
+  SQSPolicyForLambda: 
+    Type: AWS::IAM::ManagedPolicy
+    Properties: 
+      ManagedPolicyName: !Ref NameOfSQSPolicyForLambda
+      Description: Custom Ploicy - SQS Receive, Delete message and Get QueueAttributes
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Sid: AllowReceiveDeleteMessageAndGetQueueAttributes
+            Effect: Allow
+            Action: 
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+            Resource: '*'
+  BasicExecutionPolicyForLambda:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Ref NameOfBasicExecutionPolicyForLambda
+      Description: Custom Policy - Basic Lambda Execution
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          -
+            Sid: AllowCreateLogGroup
+            Effect: Allow
+            Action: logs:CreateLogGroup
+            Resource: !Join [':', ['arn', 'aws', 'logs', !Ref 'AWS::Region', !Ref 'AWS::AccountId', '*']]
+          - Sid: AllowCreateLogStreamAndPutLogEvents
+            Effect: Allow
+            Action: 
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: !Join [':', ['arn', 'aws', 'logs', !Ref 'AWS::Region', !Ref 'AWS::AccountId', 'log-group', 
+                            !Join ['/', ['/aws','lambda',
+                                !Join ['',[!Ref DemoLambdaFunctionName, '*']]
+                              ]]
+                            ]]
+  BasicExecutionRoleForLambda:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref NameOfExecutionRoleForLambda
+      Description: Allows Lambda functions to call AWS services on your behalf.
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - !Ref BasicExecutionPolicyForLambda
+        - !Ref SQSPolicyForLambda
+  DemoLambdaFunction: 
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      FunctionName: !Ref DemoLambdaFunctionName
+      Role: !GetAtt BasicExecutionRoleForLambda.Arn
+      Handler: index.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+
+          def lambda_handler(event, context):
+            # TODO implement
+            print(f" SQS Message - {event['Records'][0]['body']}")
+    
+            return {
+                'statusCode': 200,
+                'body': json.dumps('Hello from Lambda!')
+                }
+
+      Description: Sample lambda function with Dead Letter Queue.
+      MemorySize: !Ref DemoLambdaMemory
+      Timeout: !Ref DemoLambdaTimeout
+      TracingConfig:
+        Mode: Active
+  DemoLambdaFunctionEventSourceMapping: 
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      FunctionName: !GetAtt DemoLambdaFunction.Arn
+      EventSourceArn: !Join [':', ['arn','aws','sqs',!Ref 'AWS::Region',!Ref 'AWS::AccountId', !Ref DemoQueueName ]]
+
